@@ -403,7 +403,7 @@ function NEI2016MonthlyEmis_regrid(
             stream = stream)
         
         # Units after conversion: kg/m²/s -> kg/kg/s
-        converted_units = regrid_units(itp) #/ u"kg/m^2"
+        converted_units = regrid_units(itp) / u"kg/m^2"
         
         @constants zero_emis=0 [unit = converted_units]
         zero_emis = ModelingToolkit.unwrap(zero_emis) # Unsure why this is necessary.
@@ -411,26 +411,17 @@ function NEI2016MonthlyEmis_regrid(
         # Apply diurnal scaling and mixing ratio conversion to certain chemical species
         # The conversion is: mixing_ratio = flux / (g0_100 * delp_dry_surface(x, y))
         if varname in ["CO", "FORM", "ISOP"]
-            # wrapper_f = (eq) -> ifelse(lev < 2, 
-            #     eq / Δz * scale * diurnal_itp(t + t_ref, x) / (g0_100 * delp_dry_surface_itp(x, y)), 
-            #     zero_emis)
             wrapper_f = (eq) -> ifelse(lev < 2, 
-            eq / Δz * scale * diurnal_itp(t + t_ref, x), 
-            zero_emis)
+                eq / Δz * scale * diurnal_itp(t + t_ref, x) / (g0_100 * delp_dry_surface_itp(x, y)), 
+                zero_emis)
         elseif varname in ["NO2", "NO"]
-            # wrapper_f = (eq) -> ifelse(lev < 2, 
-            #     eq / Δz * scale * diurnal_itp_NOx(t + t_ref, x) / (g0_100 * delp_dry_surface_itp(x, y)), 
-            #     zero_emis)
             wrapper_f = (eq) -> ifelse(lev < 2, 
-            eq / Δz * scale * diurnal_itp_NOx(t + t_ref, x), 
-            zero_emis)
+                eq / Δz * scale * diurnal_itp_NOx(t + t_ref, x) / (g0_100 * delp_dry_surface_itp(x, y)), 
+                zero_emis)
         else
-            # wrapper_f = (eq) -> ifelse(lev < 2, 
-            #     eq / Δz * scale / (g0_100 * delp_dry_surface_itp(x, y)), 
-            #     zero_emis)
             wrapper_f = (eq) -> ifelse(lev < 2, 
-            eq / Δz * scale, 
-            zero_emis)
+                eq / Δz * scale / (g0_100 * delp_dry_surface_itp(x, y)), 
+                zero_emis)
         end
         
         eq,
