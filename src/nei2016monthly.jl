@@ -10,8 +10,8 @@ const DELP_DRY_SURFACE_ITP = let
     delp_data = load(joinpath(@__DIR__, "mean_domian_delp_dry_surface.jld2"), "mean_domian_delp_dry_surface")
     
     # Define the grid coordinates
-    domain_lon = collect(-115:0.625:-68.75)
-    domain_lat = collect(25:0.5:53.7)
+    domain_lon = collect(-125.0 : 0.625 : -66.875)
+    domain_lat = collect(25.0 : 0.5 : 49.0)
     
     # Create 2D interpolator with flat extrapolation (use boundary values for out-of-bounds)
     # Note: delp_data should be (lon, lat) ordered to match (domain_lon, domain_lat)
@@ -296,33 +296,24 @@ function NEI2016MonthlyEmis(
         # Don't pre-declare units - let ModelingToolkit infer from the actual equation
         # The conversion formula divides flux (kg/m²/s) by (g0_100 * delp), giving kg/kg/s
         # But we need zero_emis to match the units of the converted result
-        converted_units = units(itp) #/ u"kg/m^2"  # = 1/s (same as kg/kg/s for emissions)
+        converted_units = units(itp) / u"kg/m^2"  # = 1/s (same as kg/kg/s for emissions)
         @constants zero_emis=0 [unit = converted_units]
         zero_emis = ModelingToolkit.unwrap(zero_emis) # Unsure why this is necessary.
         
         # Apply diurnal scaling and mixing ratio conversion to certain chemical species
         # The conversion is: mixing_ratio = flux / (g0_100 * delp_dry_surface(x, y))
         if varname in ["CO", "FORM", "ISOP"]
-            # wrapper_f = (eq) -> ifelse(lev < 2, 
-            #     eq / Δz * scale * diurnal_itp(t + t_ref, x) / (g0_100 * delp_dry_surface_itp(x, y)), 
-            #     zero_emis)
             wrapper_f = (eq) -> ifelse(lev < 2, 
-            eq / Δz * scale * diurnal_itp(t + t_ref, x), 
-            zero_emis)
+                eq / Δz * scale * diurnal_itp(t + t_ref, x) / (g0_100 * delp_dry_surface_itp(x, y)), 
+                zero_emis)
         elseif varname in ["NO2", "NO"]
-            # wrapper_f = (eq) -> ifelse(lev < 2, 
-            #     eq / Δz * scale * diurnal_itp_NOx(t + t_ref, x) / (g0_100 * delp_dry_surface_itp(x, y)), 
-            #     zero_emis)
             wrapper_f = (eq) -> ifelse(lev < 2, 
-            eq / Δz * scale * diurnal_itp_NOx(t + t_ref, x), 
-            zero_emis)
+                eq / Δz * scale * diurnal_itp_NOx(t + t_ref, x) / (g0_100 * delp_dry_surface_itp(x, y)), 
+                zero_emis)
         else
-            # wrapper_f = (eq) -> ifelse(lev < 2, 
-            #     eq / Δz * scale / (g0_100 * delp_dry_surface_itp(x, y)), 
-            #     zero_emis)
             wrapper_f = (eq) -> ifelse(lev < 2, 
-            eq / Δz * scale, 
-            zero_emis)
+                eq / Δz * scale / (g0_100 * delp_dry_surface_itp(x, y)), 
+                zero_emis)
         end
         
         eq,
@@ -412,7 +403,7 @@ function NEI2016MonthlyEmis_regrid(
             stream = stream)
         
         # Units after conversion: kg/m²/s -> kg/kg/s
-        converted_units = regrid_units(itp) / u"kg/m^2"
+        converted_units = regrid_units(itp) #/ u"kg/m^2"
         
         @constants zero_emis=0 [unit = converted_units]
         zero_emis = ModelingToolkit.unwrap(zero_emis) # Unsure why this is necessary.
@@ -420,17 +411,26 @@ function NEI2016MonthlyEmis_regrid(
         # Apply diurnal scaling and mixing ratio conversion to certain chemical species
         # The conversion is: mixing_ratio = flux / (g0_100 * delp_dry_surface(x, y))
         if varname in ["CO", "FORM", "ISOP"]
+            # wrapper_f = (eq) -> ifelse(lev < 2, 
+            #     eq / Δz * scale * diurnal_itp(t + t_ref, x) / (g0_100 * delp_dry_surface_itp(x, y)), 
+            #     zero_emis)
             wrapper_f = (eq) -> ifelse(lev < 2, 
-                eq / Δz * scale * diurnal_itp(t + t_ref, x) / (g0_100 * delp_dry_surface_itp(x, y)), 
-                zero_emis)
+            eq / Δz * scale * diurnal_itp(t + t_ref, x), 
+            zero_emis)
         elseif varname in ["NO2", "NO"]
+            # wrapper_f = (eq) -> ifelse(lev < 2, 
+            #     eq / Δz * scale * diurnal_itp_NOx(t + t_ref, x) / (g0_100 * delp_dry_surface_itp(x, y)), 
+            #     zero_emis)
             wrapper_f = (eq) -> ifelse(lev < 2, 
-                eq / Δz * scale * diurnal_itp_NOx(t + t_ref, x) / (g0_100 * delp_dry_surface_itp(x, y)), 
-                zero_emis)
+            eq / Δz * scale * diurnal_itp_NOx(t + t_ref, x), 
+            zero_emis)
         else
+            # wrapper_f = (eq) -> ifelse(lev < 2, 
+            #     eq / Δz * scale / (g0_100 * delp_dry_surface_itp(x, y)), 
+            #     zero_emis)
             wrapper_f = (eq) -> ifelse(lev < 2, 
-                eq / Δz * scale / (g0_100 * delp_dry_surface_itp(x, y)), 
-                zero_emis)
+            eq / Δz * scale, 
+            zero_emis)
         end
         
         eq,
