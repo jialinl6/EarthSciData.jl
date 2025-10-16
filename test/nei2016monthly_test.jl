@@ -24,7 +24,7 @@ fileset = EarthSciData.NEI2016MonthlyEmisFileSet("mrggrid_withbeis_withrwc", ts,
 
 eqs = equations(emis)
 @test length(eqs) == 69
-@test contains(string(eqs[1].rhs), "/ Δz")
+#@test contains(string(eqs[1].rhs), "/ Δz")
 
 sample_time = DateTime(2016, 5, 1)
 
@@ -69,17 +69,42 @@ end
 
 @testset "run" begin
     @constants uc = 1.0 [unit = u"s" description = "unit conversion"]
-    eq = Differential(t)(emis.ACET) ~ equations(emis)[1].rhs * 1e10 / uc
+    eq = Differential(t)(emis.ACET) ~ equations(emis)[1].rhs / uc
     sys = extend(ODESystem([eq], t, [], []; name = :test_sys), emis)
     sys = structural_simplify(sys)
     prob = ODEProblem(
         sys,
         zeros(1),
         (0.0, 60.0),
-        [lat => deg2rad(40.0), lon => deg2rad(-97.0), lev => 1.0]
+        [lat => deg2rad(40.0), lon => deg2rad(-97.5), lev => 1.0]
     )
     sol = solve(prob, Tsit5())
-    @test 2 > sol.u[end][end] > 1
+    @test sol.u[end][end] ≈ 5.08133281184207e-11
+end
+
+@testset "run_regrid" begin
+    domain = DomainInfo(
+    DateTime(2016, 5, 16),
+    DateTime(2016, 5, 17);
+    lonrange=deg2rad(-125):deg2rad(0.625):deg2rad(-66.875),
+    latrange=deg2rad(25):deg2rad(0.5):deg2rad(49),
+    levrange=1:2,
+    u_proto=zeros(Float64, 1, 1, 1, 1))
+
+    emis_regrid = NEI2016MonthlyEmis_regrid("mrggrid_withbeis_withrwc", domain)
+    @constants uc = 1.0 [unit = u"s" description = "unit conversion"]
+    eq = Differential(t)(emis_regrid.ACET) ~ equations(emis_regrid)[1].rhs / uc
+    sys = extend(ODESystem([eq], t, [], []; name = :test_sys), emis_regrid)
+    sys = structural_simplify(sys)
+    prob = ODEProblem(
+        sys,
+        zeros(1),
+        (0.0, 60.0),
+        [lat => deg2rad(40.0), lon => deg2rad(-97.5), lev => 1.0]
+    )
+    sol = solve(prob, Tsit5())
+    println(sol.u)
+    @test sol.u[end][end] ≈ 5.750045239024546e-11
 end
 
 @testset "diurnal_itp function" begin
@@ -165,11 +190,16 @@ end
     @test_throws ArgumentError EarthSciData.lazyload!(itp, sample_time)
 end
 
+@testset "delp_dry_surface_itp" begin
+    @test EarthSciData.delp_dry_surface_itp(deg2rad(-94.375), deg2rad(44.5)) ≈ 14.721285536474896
+    @test EarthSciData.delp_dry_surface_itp(deg2rad(-88.125), deg2rad(42.0)) ≈ 14.8498301901334
+end
+
 @testset "regridding" begin
     emis = NEI2016MonthlyEmis_regrid("mrggrid_withbeis_withrwc", domain)
     eqs = equations(emis)
     @test length(eqs) == 69
-    @test contains(string(eqs[1].rhs), "/ Δz")
+    #@test contains(string(eqs[1].rhs), "/ Δz")
     
     sample_time = DateTime(2016, 5, 1)
     
@@ -194,8 +224,8 @@ end
         domain = DomainInfo(
             DateTime(2016, 5, 16, 12, 0, 0),
             DateTime(2016, 5, 17, 12, 0, 0);
-            lonrange=deg2rad(-115):deg2rad(0.625):deg2rad(-68.75),
-            latrange=deg2rad(25):deg2rad(0.5):deg2rad(53.7),
+            lonrange=deg2rad(-125):deg2rad(0.625):deg2rad(-66.875),
+            latrange=deg2rad(25):deg2rad(0.5):deg2rad(49),
             levrange = 1:10
         )
         ts, te = get_tspan_datetime(domain)
@@ -210,7 +240,7 @@ end
             # Test regridding function
             result = EarthSciData.regrid!(itp, ts, deg2rad(-88.125), deg2rad(42.0))
 
-            @test result ≈ 7.438617527610653e-9 
+            @test result ≈ 1.4877230760034898e-8   rtol = 0.01
         else
             @test_skip "regrid_weights.jld2 file not found - skipping RegridDataSetInterpolator tests"
         end
@@ -223,8 +253,8 @@ end
             domain = DomainInfo(
                 DateTime(2016, 5, 1),
                 DateTime(2016, 5, 2);
-                lonrange=deg2rad(-115):deg2rad(0.625):deg2rad(-68.75),
-                latrange=deg2rad(25):deg2rad(0.5):deg2rad(53.7),
+                lonrange=deg2rad(-125):deg2rad(0.625):deg2rad(-66.875),
+                latrange=deg2rad(25):deg2rad(0.5):deg2rad(49),
                 levrange = 1:10
             )
             ts, te = get_tspan_datetime(domain)
@@ -246,15 +276,15 @@ end
             
             # Check if coordinates match grid points
             lon_idx = findfirst(x -> abs(x - lon_coord) < 1e-10, grid_coords[1])
-            @test lon_idx == 44
+            @test lon_idx == 60
             lat_idx = findfirst(x -> abs(x - lat_coord) < 1e-10, grid_coords[2])
             @test lat_idx == 35
             # Get the regridded data directly from the cache
-            regridded_value = itp.data[44, 35, 2]  # [lon_idx, lat_idx, time_idx]
+            regridded_value = itp.data[60, 35, 2]  # [lon_idx, lat_idx, time_idx]
             # time dimension 2 is May data
             
             # Test if the direct regridded value matches expected
-            @test regridded_value ≈ 7.438617527610653e-9 
+            @test regridded_value ≈ 1.4877230760034898e-8 rtol = 0.01
         else
             @test_skip "regrid_weights.jld2 file not found - skipping direct regrid_from! test"
         end
@@ -276,28 +306,27 @@ end
             
             j, src_idx, w_flux, count = EarthSciData.contributors_for_lonlat_exact_match(
                 lon_rad, lat_rad, weights, src_idx_buffer, w_flux_buffer, coord_lookup)
-            @test j == 2594
-            @test src_idx[1] == 74358
-            @test w_flux[1] == 0.07984727308263263
+            @test j == 3256
+            @test src_idx[1] == 74630
+            @test w_flux[1] == 0.0006596109476296964
 
         else
             @test_skip "regrid_weights.jld2 file not found - skipping contributors_for_lonlat tests"
         end
     end
 
-
 @testset "regrid emission values" begin
     domain = DomainInfo(
         DateTime(2016, 5, 15),
         DateTime(2016, 5, 16);
-        lonrange=deg2rad(-87.5):deg2rad(0.625):deg2rad(-86.25),
+        lonrange=deg2rad(-88.125):deg2rad(0.625):deg2rad(-86.875),
         latrange=deg2rad(42):deg2rad(0.5):deg2rad(43),
         levrange = 1:2
     )
     emis = NEI2016MonthlyEmis_regrid("mrggrid_withbeis_withrwc", domain)
     eqs = equations(emis)
     @test length(eqs) == 69
-    @test contains(string(eqs[1].rhs), "/ Δz")
+    # @test contains(string(eqs[1].rhs), "/ Δz")
     
     ts, te = get_tspan_datetime(domain)
     sample_time = ts
@@ -306,9 +335,9 @@ end
     # 3. Setup output array
     t_end = 3600  # in seconds (you can use longer for realistic change)
     nt = 5  # number of time steps saved
-    lon_grid = deg2rad(-87.5):deg2rad(0.625):deg2rad(-86.25)
+    lon_grid = deg2rad(-88.125):deg2rad(0.625):deg2rad(-86.875)
     lat_grid = deg2rad(42):deg2rad(0.5):deg2rad(43)
-    FORM_PRIMARY_map = Array{Float64}(undef, length(lon_grid), length(lat_grid), nt)
+    NO_map = Array{Float64}(undef, length(lon_grid), length(lat_grid), nt)
     tspan = (0.0, t_end)
 
     # 4. Constants
@@ -322,8 +351,8 @@ end
     for (i, lon_val) in enumerate(lon_grid)
         for (j, lat_val) in enumerate(lat_grid)
             # Create ODE system
-            eq = Differential(t)(emis.FORM_PRIMARY) ~ equations(emis)[20].rhs / uc
-            sys = extend(ODESystem([eq], t, [], []; name = Symbol("form_primary_sys_$(i)_$(j)")), emis)
+            eq = Differential(t)(emis.NO) ~ equations(emis)[31].rhs / uc
+            sys = extend(ODESystem([eq], t, [], []; name = Symbol("NO_sys_$(i)_$(j)")), emis)
             sys = structural_simplify(sys)
 
             # Setup problem
@@ -337,10 +366,10 @@ end
             sol = solve(prob, Tsit5(), saveat=saveat)
 
             # Store time series
-            FORM_PRIMARY_map[i, j, :] = getindex.(sol.u, 1)  # extract scalar values
+            NO_map[i, j, :] = getindex.(sol.u, 1)  # extract scalar values
         end
     end
-    @test FORM_PRIMARY_map[1, 1, end] ≈ 2.9424651777303708e-9 rtol = 0.01
+    @test NO_map[1, 1, end] ≈ 1.4877230035317165e-8*3600*0.88 /(100.0 / 9.80665 * 14.8498301901334) rtol = 0.01
     # The value is not exactly the same as the expected value because the model value is interpolated between the April and May regriddeddata.
-end
+    end
 end

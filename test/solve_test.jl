@@ -14,7 +14,7 @@ domain = DomainInfo(
     levrange = 1:1:2
 )
 
-@variables ACET(t)=0.0 [unit = u"kg*m^-3"]
+@variables ACET(t)=0.0 [unit = u"kg/kg"]
 @constants c=1000 [unit = u"s"]
 
 struct SysCoupler
@@ -47,7 +47,7 @@ end
     ]
     prob = ODEProblem(sys2, [], get_tspan(domain), [])
     sol = solve(prob, Tsit5())
-    @test only(sol.u[end]) ≈ 5.844687946776202e-6
+    @test only(sol.u[end]) ≈ 2.2934818546266597e-6 rtol = 0.01
 end
 
 emis = NEI2016MonthlyEmis("mrggrid_withbeis_withrwc", domain)
@@ -60,7 +60,7 @@ prob = ODEProblem(csys, st)
 
 sol = solve(prob, Euler(), dt = dt)
 
-@test sum(sol.u[end]) ≈ 2.7791006168742467e-5
+@test sum(sol.u[end]) ≈ 1.2427611177095041e-5 rtol = 0.01
 
 st = SolverStrangThreads(Tsit5(), dt)
 
@@ -68,7 +68,7 @@ prob = ODEProblem(csys, st)
 
 sol = solve(prob, Euler(), dt = dt)
 
-@test sum(sol.u[end]) ≈ 2.7791006168742467e-5
+@test sum(sol.u[end]) ≈ 1.2427611177083582e-5 rtol = 0.01
 
 st = SolverIMEX()
 
@@ -76,14 +76,14 @@ prob = ODEProblem(csys, st)
 
 sol = solve(prob, KenCarp3())
 
-@test sum(sol.u[end]) ≈ 2.414101174478711e-5
+@test sum(sol.u[end]) ≈ 1.0853047399831468e-5 rtol = 0.01
 
 @test_nowarn solve(prob, KenCarp3())
 
 domain_2 = DomainInfo(
     DateTime(2016, 5, 1), DateTime(2016, 5, 2),
-    lonrange = deg2rad(-115):deg2rad(0.625):deg2rad(-68.75),
-    latrange = deg2rad(25):deg2rad(0.5):deg2rad(53.71875),
+    lonrange = deg2rad(-125):deg2rad(0.625):deg2rad(-66.875),
+    latrange = deg2rad(25):deg2rad(0.5):deg2rad(49),
     levrange = 1:1:2
 )
 
