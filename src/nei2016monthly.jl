@@ -416,7 +416,7 @@ function NEI2016MonthlyEmis_regrid(
                 zero_emis)
         elseif varname in ["FORM"]
             wrapper_f = (eq) -> ifelse(lev < 2, 
-                eq / Δz * scale * diurnal_itp(t + t_ref, x) / (g0_100 * delp_dry_surface_itp(x, y)) * 2, 
+                eq / Δz * scale * diurnal_itp(t + t_ref, x) / (g0_100 * delp_dry_surface_itp(x, y)), 
                 zero_emis)
         elseif varname in ["ISOP"]
             wrapper_f = (eq) -> ifelse(lev < 2, 
@@ -428,7 +428,7 @@ function NEI2016MonthlyEmis_regrid(
                 zero_emis)
         elseif varname in ["NO"]
             wrapper_f = (eq) -> ifelse(lev < 2, 
-                eq / Δz * scale * diurnal_itp_NOx(t + t_ref, x) / (g0_100 * delp_dry_surface_itp(x, y)), 
+                eq / Δz * scale * diurnal_itp_NOx(t + t_ref, x) / (g0_100 * delp_dry_surface_itp(x, y)) * 0.5, 
                 zero_emis)
         else
             wrapper_f = (eq) -> ifelse(lev < 2, 
