@@ -200,6 +200,13 @@ function loadslice!(
             data .*= scale  # Now data is in kg/s per grid cell
         end
 
+        # The EPA files are labeled "tons/day" but the stored values are actually
+        # monthly totals. The unit conversion above divides by one day (86400 s),
+        # so applying the value as a constant rate over the whole month over-counts
+        # emissions by the number of days in the month (~30x). Normalize to a true
+        # daily rate so the per-second rate is correct.
+        data ./= Dates.daysinmonth(t)
+
         # Step 2: Convert from kg/s per grid cell to kg/s/m² for conservative regridding
         # This is the flux density that can be conservatively regridded
         Δx = fs.ds.attrib["XCELL"]  # Cell width in meters
