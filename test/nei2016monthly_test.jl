@@ -396,3 +396,30 @@ end
 
     @test ACET_map[1, 1, end] != 0.0  # Ensure we get nonzero emissions
 end
+
+@testitem "local-time clock conventions" begin
+    using EarthSciData
+    using Dates: DateTime, datetime2unix
+
+    # Dallas (96.8°W), 12:00 UTC: NOx clock round(lon/15) = -6 h, CO clock floor(lon/15) = -7 h.
+    t = datetime2unix(DateTime(2016, 7, 15, 12))
+    dallas = deg2rad(-96.8)
+    @test EarthSciData.diurnal_itp_NOx(t, dallas) == EarthSciData.DIURNAL_FACTORS_NOx[6 + 1]
+    @test EarthSciData.diurnal_itp(t, dallas) == EarthSciData.DIURNAL_FACTORS[5 + 1]
+
+    # Half-hour meridians on the 0.625° grid; EDGAR file offsets are -6, -6, -8 (round half to even).
+    for (lon_deg, offset) in ((-97.5, -6), (-82.5, -6), (-112.5, -8))
+        @test EarthSciData.diurnal_itp_NOx(t, deg2rad(lon_deg)) ==
+              EarthSciData.DIURNAL_FACTORS_NOx[12 + offset + 1]
+    end
+
+    # 2016-07-17 06:30 UTC is Sunday; at 97.5°W it is Sunday on the NOx clock, Saturday on the CO clock.
+    ts = datetime2unix(DateTime(2016, 7, 17, 6, 30))
+    @test EarthSciData.dayofweek_itp_NOx(ts, deg2rad(-97.5)) == EarthSciData.DayofWeekFactors_NOx[7]
+    @test EarthSciData.dayofweek_itp_CO(ts, deg2rad(-97.5)) == EarthSciData.DayofWeekFactors_CO[6]
+
+    @test EarthSciData.DayofWeekFactors_NOx == [1.0706, 1.0706, 1.0706, 1.0706, 1.0706, 0.863, 0.784]
+    @test EarthSciData.DayofWeekFactors_CO == [1.1076, 1.1076, 1.1076, 1.1076, 1.1076, 0.779, 0.683]
+    @test sum(EarthSciData.DayofWeekFactors_NOx) ≈ 7
+    @test sum(EarthSciData.DayofWeekFactors_CO) ≈ 7
+end
