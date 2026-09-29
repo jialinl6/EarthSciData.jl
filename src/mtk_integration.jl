@@ -14,6 +14,16 @@ end
 
 (itp::ITPWrapper)(t, locs::Vararg{T, N}) where {T, N} = interp_unsafe(itp.itp, t, locs...)
 
+# Interface for callable parameters that hold interpolators, so the updater event can find
+# them and load new data into them: `ITPWrapper` holds one; other wrappers may hold several.
+is_itp_wrapper(x) = false
+is_itp_wrapper(::ITPWrapper) = true
+wrapped_itps(w::ITPWrapper) = (w.itp,)
+function lazyload_wrapper!(w::ITPWrapper, t)
+    w.itp = lazyload!(w.itp, t)
+    w
+end
+
 # Dummy functions for unit validation. Basically ModelingToolkit
 # will call the function with a DynamicQuantities.Quantity or an integer to
 # get information about the type and units of the output.
@@ -113,7 +123,8 @@ function create_updater_sys_event(name, params, starttime::DateTime)
         params_to_update = []
         for p in parameters(sys) # Figure out which parameters need to be updated.
             psym = EarthSciMLBase.var2symbol(p)
-            if (psym in pnames) && (psym in needed) && ModelingToolkit.hasdefault(p) && ModelingToolkit.getdefault(p) isa ITPWrapper
+            if (psym in pnames) && (psym in needed) && ModelingToolkit.hasdefault(p) &&
+               is_itp_wrapper(ModelingToolkit.getdefault(p))
                 push!(psyms, psym)
                 push!(params_to_update, p)
             end
@@ -121,15 +132,13 @@ function create_updater_sys_event(name, params, starttime::DateTime)
         params_to_update = NamedTuple{Tuple(psyms)}(params_to_update)
         all_tstops = []
         for p_itp in params_to_update
-            itp = ModelingToolkit.getdefault(p_itp).itp
-            push!(all_tstops, get_tstops(itp, starttime)...)
+            for itp in wrapped_itps(ModelingToolkit.getdefault(p_itp))
+                push!(all_tstops, get_tstops(itp, starttime)...)
+            end
         end
         all_tstops = unique(all_tstops) .- t_ref
         function update_itps!(modified, observed, ctx, integ)
-            function loadf(p_itp)
-                p_itp.itp = lazyload!(p_itp.itp, integ.t + t_ref)
-                return p_itp
-            end
+            loadf(p_itp) = lazyload_wrapper!(p_itp, integ.t + t_ref)
             NamedTuple((k => loadf(v) for (k, v) in pairs(modified)))
         end
         if length(params_to_update) == 0
